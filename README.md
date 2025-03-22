@@ -36,6 +36,21 @@ Forget boring SSH commands — just `zap fw paris` or `zap search` and teleport 
 
 ---
 
+## ⚠️ Disclaimer
+
+This tool is provided **"as is"**, without any warranty or guarantee of any kind.
+
+We’ve taken care to make Zap safe, clean, and reliable — but if it breaks your workstation, eats your `/etc/hosts`, starts an intergalactic war, or makes your laptop burst into flames...  
+**that's on you** 🔥💻🤷
+
+Always review what it does — especially when running with `sudo`.
+
+---
+
+*P.S.: Parts of this project were written with the assistance of an AI / Large Language Model (LLM), but the full specifications, code review, final decisions (and bad jokes) are entirely human.*
+
+---
+
 ## ⚡️ Quickstart
 
 ```bash

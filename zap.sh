@@ -551,38 +551,31 @@ fi
 # ================================
 usage() {
     cat <<EOF
-⚙️  Usage: zap <command> [arguments...]
+⚡️ Usage: zap <command> [arguments...]
 
-Description:
-  Zap is your fun, emoji-powered teleportation tool for SSH access.
-  Manage your server categories and hosts with YAML config, search interactively,
-  and connect to your devices with style!
+Zap is your zero-bullsh*t SSH CLI for infra engineers.  
+Manage servers with YAML config, fuzzy search, and direct teleportation.
 
 Commands:
   help                              Show this help message
-  version                           Show Zap version information
-  add category                      Add a new category to your configuration
-  add host                          Add a new host under a specified category
-  list [<category>]                 List all categories (or filter by a specific category)
-  export all                        Export the entire configuration (settings + categories) as a tgz archive
-  export settings                   Export only the global settings as a tgz archive
-  export category <cat> [<cat> ...]   Export one or more specific categories as a tgz archive
-  import <file>                     Import configuration from a tgz archive (merging updates)
-  search [<category>]               Launch interactive fuzzy search for hosts (optionally filter by category)
-  <category> <host> [SSH opts]        Connect directly to a host using category and host aliases
+  version                           Show current version
+  add category                      Add a new category (emoji, user, port, aliases)
+  add host                          Add a new host under a category
+  list [<category>]                 List all categories or a specific one
+  search [<category>]               Launch fuzzy search (optionally filtered)
+  export all                        Export full config (settings + categories) as .tgz
+  export settings                   Export only global settings
+  export category <cat> [...]       Export one or more specific categories
+  import <file.tgz>                 Import config from a .tgz archive (merge mode)
+  <category> <host> [SSH opts]      Direct SSH to host (aliases supported, add --ping to test reachability)
 
 Examples:
-  zap add category                 Add a new category
-  zap add host                     Add a host to a category
-  zap list firewalls               List hosts only in the "firewalls" category
-  zap export all                   Export the entire configuration to a tgz file
-  zap export settings              Export global settings only
-  zap export category firewalls    Export the "firewalls" category
-  zap import team_zap.tgz          Import and merge configuration from "team_zap.tgz"
-  zap search fw                    Fuzzy search within the "fw" category
-  zap fw paris                     Connect to host "paris" in category "fw"
-  zap switches core-dc1 -l admin -p 2222   Connect with a custom username and port
-  zap fw paris --ping              Ping the host instead of connecting
+  zap add category                 # Start creating your categories
+  zap add host                     # Add a host to a category
+  zap fw paris                     # SSH into 'paris' in category 'fw'
+  zap fw paris --ping              # Ping the host instead of SSH
+  zap export category firewalls    # Export just a few categories
+  zap import backup_20250322.tgz   # Merge config from a backup archive
 
 EOF
 }

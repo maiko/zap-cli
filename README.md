@@ -1,5 +1,4 @@
-# ⚡️ Zap — YAML-configurable, fuzzy-searchable, zero-bullsh*t SSH teleportation tool
-
+# ⚡️ Zap
 ![Zap version](https://img.shields.io/badge/version-v1.0.0-blueviolet?style=flat-square)
 ![Made With Bash](https://img.shields.io/badge/Made%20with-Bash-1f425f?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)

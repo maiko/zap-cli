@@ -10,10 +10,26 @@
 # supports interactive fuzzy search, and handles aliases, ports, usernames,
 # and exports with grace.
 #
-# Example usage:
-#   zap fw paris         # connect to 'paris' in category 'fw'
-#   zap search           # fuzzy-search all hosts
-#   zap export category firewalls switches
+# Commands:
+#   help                              Show this help message
+#   version                           Show current version
+#   add category                      Add a new category to your configuration
+#   add host                          Add a new host under a category
+#   list [<category>]                 List all categories (or filter by a specific one)
+#   gen hosts [--write]               Generate an /etc/hosts block from your Zap config
+#   export all                        Export full config (settings + categories) as a tgz archive
+#   export settings                   Export only global settings as a tgz archive
+#   export category <cat> [...]       Export one or more specific categories as a tgz archive
+#   import <file.tgz>                 Import config from a tgz archive (merge mode)
+#   search [<category>]               Launch interactive fuzzy search for hosts (optionally filtered)
+#   <category> <host> [SSH opts]       Connect directly using category and host aliases
+#
+# Examples:
+#   zap add category                 Add a new category
+#   zap add host                     Add a host to a category
+#   zap fw paris                     Connect to host 'paris' in category 'fw'
+#   zap search fw                    Fuzzy search within the 'fw' category
+#   zap gen hosts --write            Generate and write an /etc/hosts block (with backup)
 #
 # Requirements:
 #   - Bash 4.x+
@@ -23,10 +39,6 @@
 #
 # Install tips:
 #   • macOS: brew install yq fzf
-#   • Linux: see install section in README or use provided Makefile
-#
-# Installation Hints:
-#   • macOS (Apple M chips and Intel): brew install yq fzf
 #   • Linux: sudo apt remove yq && sudo wget https://github.com/mikefarah/yq/releases/download/v4.45.1/yq_linux_amd64 -O /usr/local/bin/yq && sudo chmod +x /usr/local/bin/yq; also install fzf.
 #
 # Ready to teleport? Just type and go. ⚡️
@@ -36,6 +48,11 @@
 # Version Constant
 # ----------------
 VERSION="v1.0.0 (2025-03-22)"
+
+# If running under sudo, reset HOME to the original user’s home dir
+if [[ "$EUID" -eq 0 && -n "$SUDO_USER" ]]; then
+    export HOME=$(eval echo "~$SUDO_USER")
+fi
 
 # ================================
 # Global Directories & Files
@@ -547,35 +564,147 @@ if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
 fi
 
 # ================================
+# Generate /etc/hosts Block
+# ================================
+# ================================
+# Generate /etc/hosts Block
+# ================================
+gen_hosts() {
+    local write_flag=false
+    if [[ "$1" == "--write" ]]; then
+        write_flag=true
+        shift
+    fi
+
+    if [[ $# -gt 0 ]]; then
+        echo "❌ [ERROR] Too many arguments. Usage: zap gen hosts [--write]" >&2
+        exit 1
+    fi
+
+    local block=""
+    block+="# ZAP-BEGIN\n"
+    local found_any=false
+
+    for cat in $(yq eval '.categories | keys | .[]' "${CONFIG_FILE}"); do
+        local cat_file="${CATEGORIES_DIR}/${cat}.yml"
+        [[ ! -f "${cat_file}" ]] && continue
+
+        block+="## ${cat}\n"
+        local cat_has=false
+
+        for host in $(yq eval '.hosts | keys | .[]' "${cat_file}"); do
+            local ip
+            ip=$(yq eval ".hosts.\"${host}\".ip" "${cat_file}")
+            if [[ -z "${ip}" || "${ip}" == "null" ]]; then
+                echo "⚠️ Host '${host}' in category '${cat}' has no IP defined — skipping" >&2
+                continue
+            fi
+            local aliases
+            aliases=$(yq eval ".hosts.\"${host}\".aliases | join(\" \")" "${cat_file}" | xargs)
+            block+="${ip}\t${host} ${aliases}\n"
+            cat_has=true
+            found_any=true
+        done
+
+        if ! $cat_has; then
+            block+="(No hosts with IP defined)\n"
+        fi
+        block+="\n"
+    done
+
+    block+="# ZAP-END"
+
+    if ! $found_any; then
+        echo "⚠️ No hosts with IP defined in the configuration." >&2
+        log_msg "WARN: No IPs found in config during gen_hosts"
+        return 1
+    fi
+
+    echo "🔧 Generated hosts block from Zap config"
+    log_msg "Generated /etc/hosts block from Zap config"
+
+    if ! $write_flag; then
+        echo -e "${block}"
+        return 0
+    fi
+
+    if [[ ! -w /etc/hosts ]]; then
+        echo "❌ [ERROR] Insufficient permissions to write to /etc/hosts" >&2
+        log_msg "ERROR: Cannot write to /etc/hosts"
+        
+        # Get the full path to the current zap script
+        local zap_path
+        zap_path="$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null)"
+        if [[ -n "${zap_path}" ]]; then
+            echo "💡 Try: sudo ${zap_path} gen hosts --write"
+        else
+            echo "💡 Try running the same command with sudo and the full path to zap"
+        fi
+        exit 1
+    fi
+
+    local backup_file_path="${BACKUP_DIR}/hosts.$(date +%Y%m%d-%H%M%S).bak"
+    cp /etc/hosts "${backup_file_path}"
+    echo "💾 /etc/hosts backup saved to: ${backup_file_path}"
+    log_msg "/etc/hosts backup saved to ${backup_file_path}"
+
+    tmpfile=$(mktemp)
+
+    awk '
+        BEGIN { zap=0 }
+        /# ZAP-BEGIN/ { zap=1; next }
+        /# ZAP-END/ { zap=0; next }
+        zap == 0 { print }
+        ' /etc/hosts > "$tmpfile"
+
+    echo -e "${block}" >> "$tmpfile"
+
+    cp "$tmpfile" /etc/hosts
+    rm -f "$tmpfile"
+
+    if grep -q "# ZAP-BEGIN" "$backup_file_path"; then
+        echo "🔁 [OK] Replaced existing Zap block in /etc/hosts"
+        log_msg "OK: Replaced existing Zap block"
+    else
+        echo "➕ [OK] Added Zap block to /etc/hosts"
+    fi
+
+    return 0
+}
+
+# ================================
 # Main Command Parser & Usage
 # ================================
 usage() {
     cat <<EOF
-⚡️ Usage: zap <command> [arguments...]
+⚡️  Usage: zap <command> [arguments...]
 
-Zap is your zero-bullsh*t SSH CLI for infra engineers.  
-Manage servers with YAML config, fuzzy search, and direct teleportation.
+Zap is your zero-bullsh*t SSH CLI for infra engineers.
+Manage your server categories and hosts with YAML config, fuzzy search, and direct teleportation.
 
 Commands:
   help                              Show this help message
-  version                           Show current version
+  version                           Show Zap version information
   add category                      Add a new category (emoji, user, port, aliases)
   add host                          Add a new host under a category
-  list [<category>]                 List all categories or a specific one
-  search [<category>]               Launch fuzzy search (optionally filtered)
+  list [<category>]                 List all categories (or filter by a specific category)
+  gen hosts [--write]               Generate an /etc/hosts block from Zap config
   export all                        Export full config (settings + categories) as .tgz
-  export settings                   Export only global settings
-  export category <cat> [...]       Export one or more specific categories
+  export settings                   Export global settings as .tgz
+  export category <cat> [...]       Export one or more specific categories as .tgz
   import <file.tgz>                 Import config from a .tgz archive (merge mode)
-  <category> <host> [SSH opts]      Direct SSH to host (aliases supported, add --ping to test reachability)
+  search [<category>]               Launch interactive fuzzy search for hosts
+  <category> <host> [SSH opts]        Direct SSH to host (aliases supported, add --ping to test reachability)
 
 Examples:
-  zap add category                 # Start creating your categories
-  zap add host                     # Add a host to a category
-  zap fw paris                     # SSH into 'paris' in category 'fw'
-  zap fw paris --ping              # Ping the host instead of SSH
-  zap export category firewalls    # Export just a few categories
-  zap import backup_20250322.tgz   # Merge config from a backup archive
+  zap add category                 Add a new category
+  zap add host                     Add a host to a category
+  zap fw paris                     Connect to host "paris" in category "fw"
+  zap search fw                    Fuzzy search within the "fw" category
+  zap gen hosts                    Generate a hosts block (print to stdout)
+  zap gen hosts --write            Write hosts block to /etc/hosts (with backup)
+  zap export category firewalls    Export the "firewalls" category
+  zap import backup_20250322.tgz   Merge config from a backup archive
 
 EOF
 }
@@ -616,6 +745,16 @@ main() {
         list)
             list_categories "$1"
             ;;
+        gen)
+            if [[ "$1" == "hosts" ]]; then
+                shift
+                gen_hosts "$@"
+            else
+                echo -e "❌ Unknown gen command. Use: zap gen hosts [--write]"
+                usage
+                exit 1
+            fi
+            ;;
         export)
             if [[ -z "$1" ]]; then
                 echo -e "❌ Please specify export mode: all, settings, or category"
@@ -634,7 +773,7 @@ main() {
             fuzzy_search "$@"
             ;;
         *)
-            # Default: assume direct connection: first argument is category alias, second is host alias.
+            # Default: direct SSH connection: first argument is category alias, second is host alias.
             if [[ $# -lt 1 ]]; then
                 echo -e "❌ Error: You must supply both a category alias and a host alias! 😅"
                 usage

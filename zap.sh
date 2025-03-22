@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # ------------------------------------------------------------------------------
 # Zap — YAML-configurable, fuzzy-searchable, zero-bullsh*t SSH teleportation tool ⚡️
-# Version: v1.0.0 (2025-03-22)
 # ------------------------------------------------------------------------------
 # Zap is a zero-bullsh*t SSH CLI built for infrastructure engineers who want
 # speed, structure, and style in the terminal.
@@ -47,7 +46,7 @@
 # ----------------
 # Version Constant
 # ----------------
-VERSION="v1.0.0 (2025-03-22)"
+VERSION="v1.1.0 (2025-03-22)"
 
 # If running under sudo, reset HOME to the original user’s home dir
 if [[ "$EUID" -eq 0 && -n "$SUDO_USER" ]]; then

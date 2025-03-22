@@ -1,11 +1,11 @@
 # ⚡️ Zap
-![Zap version](https://img.shields.io/badge/version-v1.0.0-blueviolet?style=flat-square)
+![Zap version](https://img.shields.io/badge/version-v1.1.0-blueviolet?style=flat-square)
 ![Made With Bash](https://img.shields.io/badge/Made%20with-Bash-1f425f?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
 ![GitHub release](https://img.shields.io/github/v/release/maiko/zap-cli?style=flat-square)
 
-**Version:** v1.0.0 (2025-03-22)  
+**Version:** v1.1.0
 **Language:** Bash  
 **Install path:** `~/bin/zap`  
 **Dependencies:** `yq (v4.x)`, `fzf`, `ssh`, `ping`
@@ -30,6 +30,7 @@ Forget boring SSH commands — just `zap fw paris` or `zap search` and teleport 
 - 💾 Auto backups with purge system
 - 📄 Import/export entire or partial configuration (as .tgz archives)
 - 🧠 Alias resolution for both categories and hosts
+- 🧾 Generate clean `/etc/hosts` blocks from your Zap config (`zap gen hosts`)
 - 🎯 Direct usage: `zap <category> <host> [--ping | SSH opts]`
 - 🧩 Autocompletion support
 
@@ -71,6 +72,7 @@ zap export all                    # Export entire config as .tgz
 zap export settings               # Export only global settings
 zap export category <cat> [...]   # Export selected categories
 zap import <file.tgz>             # Import and merge from a .tgz archive
+zap gen hosts [--write]           # Generate a /etc/hosts block (with optional write to file)
 zap <cat> <host> [opts]           # SSH into a host or ping (add --ping)
 ```
 

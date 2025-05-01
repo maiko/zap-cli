@@ -67,6 +67,8 @@ CONFIG_FILE="${CONFIG_DIR}/config.yml"  # Global config holds settings & categor
 SSH_BIN="/usr/bin/ssh"
 RETENTION_DAYS=7
 ENABLE_WELCOME=false
+AUTO_FALLBACK=false
+FALLBACK_TIMEOUT=15
 LOGFILE=""
 
 # ================================
@@ -96,6 +98,9 @@ init_config() {
 ssh_bin: ${SSH_BIN}
 enable_welcome: false
 backup_retention_days: ${RETENTION_DAYS}
+ip_aliases:
+  auto_fallback: false
+  fallback_timeout: 15
 logging:
   enabled: false
   logfile: "${CONFIG_DIR}/zap.log"
@@ -111,6 +116,8 @@ load_config() {
     fi
     ENABLE_WELCOME=$(yq eval '.enable_welcome // false' "${CONFIG_FILE}")
     RETENTION_DAYS=$(yq eval '.backup_retention_days // 7' "${CONFIG_FILE}")
+    AUTO_FALLBACK=$(yq eval '.ip_aliases.auto_fallback // false' "${CONFIG_FILE}")
+    FALLBACK_TIMEOUT=$(yq eval '.ip_aliases.fallback_timeout // 15' "${CONFIG_FILE}")
     logging_enabled=$(yq eval '.logging.enabled // false' "${CONFIG_FILE}")
     if [[ "${logging_enabled}" == "true" ]]; then
         LOGFILE=$(yq eval '.logging.logfile // "'${CONFIG_DIR}/zap.log'"' "${CONFIG_FILE}")
@@ -215,6 +222,14 @@ add_host() {
     read -r host_key
     echo -e "📡 Enter the IP address (optional, leave blank to use the hostname for DNS resolution):"
     read -r ip_addr
+    echo -e "🔧 Enter additional IP aliases (comma-separated, optional):"
+    read -r ip_alias_line
+    IFS=',' read -ra ip_alias_arr <<< "${ip_alias_line}"
+    trimmed_ip_aliases=()
+    for a in "${ip_alias_arr[@]}"; do
+        trimmed_ip_aliases+=( "\"$(echo "${a}" | xargs)\"" )
+    done
+    ip_aliases="[ $(IFS=,; echo "${trimmed_ip_aliases[*]}") ]"
     echo -e "👤 Enter the username (optional, leave empty to use category default):"
     read -r username
     echo -e "💻 Enter the SSH port (optional, leave empty to use category default):"
@@ -229,8 +244,108 @@ add_host() {
     aliases="[ $(IFS=,; echo "${trimmed_aliases[*]}") ]"
 
     backup_file "${cat_file}"
-    yq eval -i '.hosts["'"${host_key}"'"] = {"ip": "'"${ip_addr}"'", "username": "'"${username}"'", "port": "'"${port}"'", "aliases": '"${aliases}"'}' "${cat_file}"
+    yq eval -i '.hosts["'"${host_key}"'"] = {"ip": "'"${ip_addr}"'", "ip_aliases": '"${ip_aliases}"', "username": "'"${username}"'", "port": "'"${port}"'", "aliases": '"${aliases}"'}' "${cat_file}"
     echo -e "✅ Host '${host_key}' successfully added to category '${cat_name}'! 🎉"
+    purge_backups
+}
+
+edit_host() {
+    echo -e "🚀 Enter the category name of the host you'd like to edit:"
+    read -r cat_name
+    exists=$(yq eval ".categories.\"${cat_name}\"" "${CONFIG_FILE}")
+    if [[ "${exists}" == "null" ]]; then
+        echo -e "❌ Category '${cat_name}' does not exist in the config! 😱"
+        exit 1
+    fi
+
+    local cat_file="${CATEGORIES_DIR}/${cat_name}.yml"
+    if [[ ! -f "${cat_file}" ]]; then
+        echo -e "❌ No host file found for '${cat_name}'! 😱"
+        exit 1
+    fi
+
+    echo -e "🌐 Enter the hostname you'd like to edit:"
+    read -r host_key
+    exists=$(yq eval ".hosts.\"${host_key}\"" "${cat_file}")
+    if [[ "${exists}" == "null" ]]; then
+        echo -e "❌ Host '${host_key}' does not exist in category '${cat_name}'! 😱"
+        exit 1
+    fi
+
+    local current_ip=$(yq eval ".hosts.\"${host_key}\".ip" "${cat_file}")
+    if [[ "${current_ip}" == "null" ]]; then current_ip=""; fi
+    echo -e "Current primary IP: ${current_ip}"
+    
+    local current_ip_aliases=$(yq eval ".hosts.\"${host_key}\".ip_aliases[]" "${cat_file}" 2>/dev/null)
+    echo -e "Current IP aliases: ${current_ip_aliases:-"None"}"
+    
+    local current_username=$(yq eval ".hosts.\"${host_key}\".username" "${cat_file}")
+    if [[ "${current_username}" == "null" ]]; then current_username=""; fi
+    echo -e "Current username: ${current_username}"
+    
+    local current_port=$(yq eval ".hosts.\"${host_key}\".port" "${cat_file}")
+    if [[ "${current_port}" == "null" ]]; then current_port=""; fi
+    echo -e "Current port: ${current_port}"
+    
+    local current_aliases=$(yq eval ".hosts.\"${host_key}\".aliases | join(\", \")" "${cat_file}")
+    if [[ "${current_aliases}" == "null" ]]; then current_aliases=""; fi
+    echo -e "Current host aliases: ${current_aliases}"
+    
+    echo -e "📡 Enter new IP address (leave empty to keep current value):"
+    read -r ip_addr
+    if [[ -z "${ip_addr}" ]]; then
+        ip_addr="${current_ip}"
+    fi
+    
+    echo -e "🔧 Enter IP aliases (comma-separated, leave empty to keep current values):"
+    read -r ip_alias_line
+    
+    if [[ -n "${ip_alias_line}" ]]; then
+        IFS=',' read -ra ip_alias_arr <<< "${ip_alias_line}"
+        trimmed_ip_aliases=()
+        for a in "${ip_alias_arr[@]}"; do
+            trimmed_ip_aliases+=( "\"$(echo "${a}" | xargs)\"" )
+        done
+        ip_aliases="[ $(IFS=,; echo "${trimmed_ip_aliases[*]}") ]"
+    else
+        ip_aliases=$(yq eval ".hosts.\"${host_key}\".ip_aliases" "${cat_file}")
+        if [[ "${ip_aliases}" == "null" ]]; then
+            ip_aliases="[]"
+        fi
+    fi
+    
+    echo -e "👤 Enter new username (leave empty to keep current value):"
+    read -r username
+    if [[ -z "${username}" ]]; then
+        username="${current_username}"
+    fi
+    
+    echo -e "💻 Enter new SSH port (leave empty to keep current value):"
+    read -r port
+    if [[ -z "${port}" ]]; then
+        port="${current_port}"
+    fi
+    
+    echo -e "🔍 Enter host aliases (comma-separated, leave empty to keep current values):"
+    read -r host_alias_line
+    
+    if [[ -n "${host_alias_line}" ]]; then
+        IFS=',' read -ra host_alias_arr <<< "${host_alias_line}"
+        trimmed_aliases=()
+        for a in "${host_alias_arr[@]}"; do
+            trimmed_aliases+=( "\"$(echo "${a}" | xargs)\"" )
+        done
+        aliases="[ $(IFS=,; echo "${trimmed_aliases[*]}") ]"
+    else
+        aliases=$(yq eval ".hosts.\"${host_key}\".aliases" "${cat_file}")
+        if [[ "${aliases}" == "null" ]]; then
+            aliases="[]"
+        fi
+    fi
+    
+    backup_file "${cat_file}"
+    yq eval -i '.hosts["'"${host_key}"'"] = {"ip": "'"${ip_addr}"'", "ip_aliases": '"${ip_aliases}"', "username": "'"${username}"'", "port": "'"${port}"'", "aliases": '"${aliases}"'}' "${cat_file}"
+    echo -e "✅ Host '${host_key}' successfully updated in category '${cat_name}'! 🎉"
     purge_backups
 }
 
@@ -270,6 +385,9 @@ list_categories() {
                 if [[ -z "${ip}" || "${ip}" == "null" ]]; then
                     ip="${host}"
                 fi
+                
+                ip_aliases=$(yq eval '.hosts["'"${host}"'"].ip_aliases | join(", ")' "${cat_file}")
+                [[ "$ip_aliases" == "null" ]] && ip_aliases=""
                 eff_user=$(yq eval ".hosts.\"${host}\".username" "${cat_file}")
                 [[ "$eff_user" == "null" ]] && eff_user=""
                 eff_port=$(yq eval ".hosts.\"${host}\".port" "${cat_file}")
@@ -280,9 +398,13 @@ list_categories() {
                 if [[ -z "$eff_port" ]]; then eff_port="$cat_default_port"; fi
 
                 if [[ -n "$eff_user" || -n "$eff_port" ]]; then
-                    printf "   - %s (%s): %s, user: %s, port: %s\n" "${host}" "${aliases}" "${ip}" "${eff_user}" "${eff_port}"
+                    printf "   - %s (%s): %s" "${host}" "${aliases}" "${ip}"
+                    [[ -n "${ip_aliases}" ]] && printf " [IP aliases: %s]" "${ip_aliases}"
+                    printf ", user: %s, port: %s\n" "${eff_user}" "${eff_port}"
                 else
-                    printf "   - %s (%s): %s\n" "${host}" "${aliases}" "${ip}"
+                    printf "   - %s (%s): %s" "${host}" "${aliases}" "${ip}"
+                    [[ -n "${ip_aliases}" ]] && printf " [IP aliases: %s]" "${ip_aliases}"
+                    printf "\n"
                 fi
             done <<< "${host_keys}"
         fi
@@ -369,11 +491,76 @@ run_ssh() {
     fi
 
     log_msg "SSH connect: category: ${cat_key}, host: ${host_key}, target: ${target}, ip: ${ip}, user: ${host_user}, port: ${host_port}"
+    
+    local ssh_cmd=""
     if [[ -n "$host_port" ]]; then
-        exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
+        ssh_cmd="${SSH_BIN} -p ${host_port} ${target} $*"
     else
-        exec "${SSH_BIN}" "${target}" "$@"
+        ssh_cmd="${SSH_BIN} ${target} $*"
     fi
+    
+    if ${ssh_cmd} -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true 2>/dev/null; then
+        if [[ -n "$host_port" ]]; then
+            exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
+        else
+            exec "${SSH_BIN}" "${target}" "$@"
+        fi
+        return 0
+    fi
+    
+    local ip_aliases
+    ip_aliases=$(yq eval ".hosts.\"${host_key}\".ip_aliases[]" "${cat_file}" 2>/dev/null)
+    
+    if [[ -z "${ip_aliases}" ]]; then
+        if [[ -n "$host_port" ]]; then
+            exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
+        else
+            exec "${SSH_BIN}" "${target}" "$@"
+        fi
+        return 0
+    fi
+    
+    echo -e "⚠️ Connection to primary IP (${ip}) failed."
+    
+    if [[ "${AUTO_FALLBACK}" == "true" ]]; then
+        echo -e "🔄 Auto-fallback enabled. Will try IP aliases automatically after ${FALLBACK_TIMEOUT} seconds..."
+        echo -e "   Press Ctrl+C to cancel..."
+        sleep "${FALLBACK_TIMEOUT}"
+    else
+        read -p "Do you want to try connecting through IP aliases? (y/n): " choice
+        if [[ "${choice}" != "y" && "${choice}" != "Y" ]]; then
+            echo -e "❌ Connection aborted."
+            exit 1
+        fi
+    fi
+    
+    for alias_ip in ${ip_aliases}; do
+        echo -e "🔄 Trying IP alias: ${alias_ip}..."
+        
+        if [[ -n "$host_user" ]]; then
+            target="${host_user}@${alias_ip}"
+        else
+            target="${alias_ip}"
+        fi
+        
+        if [[ -n "$host_port" ]]; then
+            if ${SSH_BIN} -p "${host_port}" "${target}" -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true 2>/dev/null; then
+                echo -e "✅ Connection to IP alias ${alias_ip} succeeded, connecting..."
+                exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
+                return 0
+            fi
+        else
+            if ${SSH_BIN} "${target}" -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true 2>/dev/null; then
+                echo -e "✅ Connection to IP alias ${alias_ip} succeeded, connecting..."
+                exec "${SSH_BIN}" "${target}" "$@"
+                return 0
+            fi
+        fi
+        echo -e "❌ Connection to IP alias ${alias_ip} failed."
+    done
+    
+    echo -e "❌ All connection attempts failed. Please check your network or host configuration."
+    exit 1
 }
 
 ping_host() {
@@ -600,7 +787,17 @@ gen_hosts() {
             fi
             local aliases
             aliases=$(yq eval ".hosts.\"${host}\".aliases | join(\" \")" "${cat_file}" | xargs)
-            block+="${ip}\t${host} ${aliases}\n"
+            
+            # Generate entry for primary IP first
+            block+="${ip}\t${host} ${aliases} # PRIMARY IP\n"
+            
+            # Generate entries for IP aliases
+            local ip_aliases
+            ip_aliases=$(yq eval ".hosts.\"${host}\".ip_aliases[]" "${cat_file}" 2>/dev/null)
+            for alias_ip in ${ip_aliases}; do
+                block+="${alias_ip}\t${host} ${aliases} # IP ALIAS\n"
+            done
+            
             cat_has=true
             found_any=true
         done
@@ -686,6 +883,7 @@ Commands:
   version                           Show Zap version information
   add category                      Add a new category (emoji, user, port, aliases)
   add host                          Add a new host under a category
+  edit host                         Edit an existing host (IP, aliases, etc.)
   list [<category>]                 List all categories (or filter by a specific category)
   gen hosts [--write]               Generate an /etc/hosts block from Zap config
   export all                        Export full config (settings + categories) as .tgz
@@ -693,15 +891,20 @@ Commands:
   export category <cat> [...]       Export one or more specific categories as .tgz
   import <file.tgz>                 Import config from a .tgz archive (merge mode)
   search [<category>]               Launch interactive fuzzy search for hosts
+  config auto-fallback <true|false> Configure automatic IP alias fallback
+  config fallback-timeout <seconds> Set the timeout for automatic fallback
   <category> <host> [SSH opts]        Direct SSH to host (aliases supported, add --ping to test reachability)
 
 Examples:
   zap add category                 Add a new category
   zap add host                     Add a host to a category
+  zap edit host                    Edit an existing host
   zap fw paris                     Connect to host "paris" in category "fw"
   zap search fw                    Fuzzy search within the "fw" category
   zap gen hosts                    Generate a hosts block (print to stdout)
   zap gen hosts --write            Write hosts block to /etc/hosts (with backup)
+  zap config auto-fallback true    Enable automatic IP alias fallback
+  zap config fallback-timeout 10   Set fallback timeout to 10 seconds
   zap export category firewalls    Export the "firewalls" category
   zap import backup_20250322.tgz   Merge config from a backup archive
 
@@ -735,14 +938,40 @@ main() {
             elif [[ "$1" == "host" ]]; then
                 shift
                 add_host
+            elif [[ "$1" == "edit" && "$2" == "host" ]]; then
+                shift 2
+                edit_host
             else
-                echo -e "❌ Unknown add command. Use: zap add category|host"
+                echo -e "❌ Unknown add command. Use: zap add category|host|edit host"
                 usage
                 exit 1
             fi
             ;;
         list)
             list_categories "$1"
+            ;;
+        config)
+            if [[ "$1" == "auto-fallback" ]]; then
+                if [[ "$2" == "true" || "$2" == "false" ]]; then
+                    backup_file "${CONFIG_FILE}"
+                    yq eval -i '.ip_aliases.auto_fallback = '"$2" "${CONFIG_FILE}"
+                    echo -e "✅ Automatic IP fallback set to: $2"
+                    load_config
+                else
+                    echo -e "❌ Valid options are 'true' or 'false'"
+                fi
+            elif [[ "$1" == "fallback-timeout" ]]; then
+                if [[ "$2" =~ ^[0-9]+$ ]]; then
+                    backup_file "${CONFIG_FILE}"
+                    yq eval -i '.ip_aliases.fallback_timeout = '"$2" "${CONFIG_FILE}"
+                    echo -e "✅ Fallback timeout set to: $2 seconds"
+                    load_config
+                else
+                    echo -e "❌ Please provide a valid number of seconds"
+                fi
+            else
+                echo -e "❌ Unknown config command. Use: auto-fallback or fallback-timeout"
+            fi
             ;;
         gen)
             if [[ "$1" == "hosts" ]]; then

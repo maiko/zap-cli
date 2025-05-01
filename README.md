@@ -27,12 +27,15 @@ Forget boring SSH commands — just `zap fw paris` or `zap search` and teleport 
 - 🔍 Fuzzy search with `fzf`, category filtering
 - 👤 Custom SSH user/port per host or category
 - 🔁 Interactive `add category`, `add host` CLI flows
+- 🌐 IP Aliases with connection fallback mechanism
 - 💾 Auto backups with purge system
 - 📄 Import/export entire or partial configuration (as .tgz archives)
 - 🧠 Alias resolution for both categories and hosts
 - 🧾 Generate clean `/etc/hosts` blocks from your Zap config (`zap gen hosts`)
 - 🎯 Direct usage: `zap <category> <host> [--ping | SSH opts]`
 - 🧩 Autocompletion support
+- 🛠 Edit existing hosts with `zap edit host`
+- ⏱ Configurable automatic fallback with timeout
 
 ---
 
@@ -81,6 +84,7 @@ zap help                          # Show usage
 zap version                       # Display current version
 zap add category                  # Add new category (with emoji, user, port)
 zap add host                      # Add host under a category
+zap edit host                     # Edit an existing host (IP, aliases, etc.)
 zap list [<category>]             # Show hosts by category
 zap search [<category>]           # Interactive fuzzy search
 zap export all                    # Export entire config as .tgz
@@ -88,6 +92,8 @@ zap export settings               # Export only global settings
 zap export category <cat> [...]   # Export selected categories
 zap import <file.tgz>             # Import and merge from a .tgz archive
 zap gen hosts [--write]           # Generate a /etc/hosts block (with optional write to file)
+zap config auto-fallback <true|false> # Configure automatic IP alias fallback
+zap config fallback-timeout <seconds> # Set the timeout for automatic fallback
 zap <cat> <host> [opts]           # SSH into a host or ping (add --ping)
 ```
 
@@ -123,6 +129,9 @@ categories:
 hosts:
   paris-fw-1:
     ip: 1.1.1.1
+    ip_aliases:
+      - 2.2.2.2
+      - 3.3.3.3
     username: admin
     port: 22
     aliases:

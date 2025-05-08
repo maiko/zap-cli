@@ -220,7 +220,7 @@ add_host() {
 
     echo -e "🌐 Enter the primary hostname (identifier) for your device:"
     read -r host_key
-©    echo -e "🔍 Enter host aliases (comma-separated, optional):"
+    echo -e "🔍 Enter host aliases (comma-separated, optional):"
     read -r host_alias_line
     echo -e "📡 Enter the IP address (optional, leave blank to use the hostname for DNS resolution):"
     read -r ip_addr

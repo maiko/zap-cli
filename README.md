@@ -1,11 +1,11 @@
 # ⚡️ Zap
-![Zap version](https://img.shields.io/badge/version-v1.1.0-blueviolet?style=flat-square)
+![Zap version](https://img.shields.io/badge/version-v1.2.0-blueviolet?style=flat-square)
 ![Made With Bash](https://img.shields.io/badge/Made%20with-Bash-1f425f?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
 
 ![GitHub release](https://img.shields.io/github/v/release/maiko/zap-cli?style=flat-square)
 
-**Version:** v1.1.0
+**Version:** v1.2.0
 **Language:** Bash  
 **Install path:** `~/bin/zap`  
 **Dependencies:** `yq (v4.x)`, `fzf`, `ssh`, `ping`

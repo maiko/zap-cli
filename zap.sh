@@ -46,7 +46,7 @@
 # ----------------
 # Version Constant
 # ----------------
-VERSION="v1.1.0 (2025-03-22)"
+VERSION="v1.2.0 (2025-05-08)"
 
 # If running under sudo, reset HOME to the original user’s home dir
 if [[ "$EUID" -eq 0 && -n "$SUDO_USER" ]]; then
@@ -220,6 +220,8 @@ add_host() {
 
     echo -e "🌐 Enter the primary hostname (identifier) for your device:"
     read -r host_key
+    echo -e "🔍 Enter host aliases (comma-separated, optional):"
+    read -r host_alias_line
     echo -e "📡 Enter the IP address (optional, leave blank to use the hostname for DNS resolution):"
     read -r ip_addr
     echo -e "🔧 Enter additional IP aliases (comma-separated, optional):"
@@ -234,8 +236,6 @@ add_host() {
     read -r username
     echo -e "💻 Enter the SSH port (optional, leave empty to use category default):"
     read -r port
-    echo -e "🔍 Enter host aliases (comma-separated, optional):"
-    read -r host_alias_line
     IFS=',' read -ra host_alias_arr <<< "${host_alias_line}"
     trimmed_aliases=()
     for a in "${host_alias_arr[@]}"; do
@@ -492,14 +492,14 @@ run_ssh() {
 
     log_msg "SSH connect: category: ${cat_key}, host: ${host_key}, target: ${target}, ip: ${ip}, user: ${host_user}, port: ${host_port}"
     
-    local ssh_cmd=""
+    local ssh_test_cmd=""
     if [[ -n "$host_port" ]]; then
-        ssh_cmd="${SSH_BIN} -p ${host_port} ${target} $*"
+        ssh_test_cmd="${SSH_BIN} -p ${host_port} ${target} -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true"
     else
-        ssh_cmd="${SSH_BIN} ${target} $*"
+        ssh_test_cmd="${SSH_BIN} ${target} -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true"
     fi
     
-    if ${ssh_cmd} -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true 2>/dev/null; then
+    if ${ssh_test_cmd} 2>/dev/null; then
         if [[ -n "$host_port" ]]; then
             exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
         else

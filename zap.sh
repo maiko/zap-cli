@@ -492,14 +492,7 @@ run_ssh() {
 
     log_msg "SSH connect: category: ${cat_key}, host: ${host_key}, target: ${target}, ip: ${ip}, user: ${host_user}, port: ${host_port}"
     
-    local ssh_test_cmd=""
-    if [[ -n "$host_port" ]]; then
-        ssh_test_cmd="${SSH_BIN} -p ${host_port} ${target} -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true"
-    else
-        ssh_test_cmd="${SSH_BIN} ${target} -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true"
-    fi
-    
-    if ${ssh_test_cmd} 2>/dev/null; then
+    if ping -c 1 -W 2 "${ip}" >/dev/null 2>&1; then
         if [[ -n "$host_port" ]]; then
             exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
         else
@@ -543,18 +536,15 @@ run_ssh() {
             target="${alias_ip}"
         fi
         
-        if [[ -n "$host_port" ]]; then
-            if ${SSH_BIN} -p "${host_port}" "${target}" -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true 2>/dev/null; then
-                echo -e "✅ Connection to IP alias ${alias_ip} succeeded, connecting..."
+        # Use ping to test basic connectivity for IP aliases
+        if ping -c 1 -W 2 "${alias_ip}" >/dev/null 2>&1; then
+            echo -e "✅ Connection to IP alias ${alias_ip} succeeded, connecting..."
+            if [[ -n "$host_port" ]]; then
                 exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
-                return 0
-            fi
-        else
-            if ${SSH_BIN} "${target}" -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -q true 2>/dev/null; then
-                echo -e "✅ Connection to IP alias ${alias_ip} succeeded, connecting..."
+            else
                 exec "${SSH_BIN}" "${target}" "$@"
-                return 0
             fi
+            return 0
         fi
         echo -e "❌ Connection to IP alias ${alias_ip} failed."
     done

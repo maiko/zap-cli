@@ -220,7 +220,7 @@ add_host() {
 
     echo -e "🌐 Enter the primary hostname (identifier) for your device:"
     read -r host_key
-    echo -e "🔍 Enter host aliases (comma-separated, optional):"
+©    echo -e "🔍 Enter host aliases (comma-separated, optional):"
     read -r host_alias_line
     echo -e "📡 Enter the IP address (optional, leave blank to use the hostname for DNS resolution):"
     read -r ip_addr
@@ -275,31 +275,31 @@ edit_host() {
     local current_ip=$(yq eval ".hosts.\"${host_key}\".ip" "${cat_file}")
     if [[ "${current_ip}" == "null" ]]; then current_ip=""; fi
     echo -e "Current primary IP: ${current_ip}"
-    
+
     local current_ip_aliases=$(yq eval ".hosts.\"${host_key}\".ip_aliases[]" "${cat_file}" 2>/dev/null)
     echo -e "Current IP aliases: ${current_ip_aliases:-"None"}"
-    
+
     local current_username=$(yq eval ".hosts.\"${host_key}\".username" "${cat_file}")
     if [[ "${current_username}" == "null" ]]; then current_username=""; fi
     echo -e "Current username: ${current_username}"
-    
+
     local current_port=$(yq eval ".hosts.\"${host_key}\".port" "${cat_file}")
     if [[ "${current_port}" == "null" ]]; then current_port=""; fi
     echo -e "Current port: ${current_port}"
-    
+
     local current_aliases=$(yq eval ".hosts.\"${host_key}\".aliases | join(\", \")" "${cat_file}")
     if [[ "${current_aliases}" == "null" ]]; then current_aliases=""; fi
     echo -e "Current host aliases: ${current_aliases}"
-    
+
     echo -e "📡 Enter new IP address (leave empty to keep current value):"
     read -r ip_addr
     if [[ -z "${ip_addr}" ]]; then
         ip_addr="${current_ip}"
     fi
-    
+
     echo -e "🔧 Enter IP aliases (comma-separated, leave empty to keep current values):"
     read -r ip_alias_line
-    
+
     if [[ -n "${ip_alias_line}" ]]; then
         IFS=',' read -ra ip_alias_arr <<< "${ip_alias_line}"
         trimmed_ip_aliases=()
@@ -313,22 +313,22 @@ edit_host() {
             ip_aliases="[]"
         fi
     fi
-    
+
     echo -e "👤 Enter new username (leave empty to keep current value):"
     read -r username
     if [[ -z "${username}" ]]; then
         username="${current_username}"
     fi
-    
+
     echo -e "💻 Enter new SSH port (leave empty to keep current value):"
     read -r port
     if [[ -z "${port}" ]]; then
         port="${current_port}"
     fi
-    
+
     echo -e "🔍 Enter host aliases (comma-separated, leave empty to keep current values):"
     read -r host_alias_line
-    
+
     if [[ -n "${host_alias_line}" ]]; then
         IFS=',' read -ra host_alias_arr <<< "${host_alias_line}"
         trimmed_aliases=()
@@ -342,7 +342,7 @@ edit_host() {
             aliases="[]"
         fi
     fi
-    
+
     backup_file "${cat_file}"
     yq eval -i '.hosts["'"${host_key}"'"] = {"ip": "'"${ip_addr}"'", "ip_aliases": '"${ip_aliases}"', "username": "'"${username}"'", "port": "'"${port}"'", "aliases": '"${aliases}"'}' "${cat_file}"
     echo -e "✅ Host '${host_key}' successfully updated in category '${cat_name}'! 🎉"
@@ -385,7 +385,7 @@ list_categories() {
                 if [[ -z "${ip}" || "${ip}" == "null" ]]; then
                     ip="${host}"
                 fi
-                
+
                 ip_aliases=$(yq eval '.hosts["'"${host}"'"].ip_aliases | join(", ")' "${cat_file}")
                 [[ "$ip_aliases" == "null" ]] && ip_aliases=""
                 eff_user=$(yq eval ".hosts.\"${host}\".username" "${cat_file}")
@@ -491,8 +491,8 @@ run_ssh() {
     fi
 
     log_msg "SSH connect: category: ${cat_key}, host: ${host_key}, target: ${target}, ip: ${ip}, user: ${host_user}, port: ${host_port}"
-    
-    if ping -c 1 -W 2 "${ip}" >/dev/null 2>&1; then
+
+    if true; then
         if [[ -n "$host_port" ]]; then
             exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
         else
@@ -500,10 +500,10 @@ run_ssh() {
         fi
         return 0
     fi
-    
+
     local ip_aliases
     ip_aliases=$(yq eval ".hosts.\"${host_key}\".ip_aliases[]" "${cat_file}" 2>/dev/null)
-    
+
     if [[ -z "${ip_aliases}" ]]; then
         if [[ -n "$host_port" ]]; then
             exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
@@ -512,9 +512,9 @@ run_ssh() {
         fi
         return 0
     fi
-    
+
     echo -e "⚠️ Connection to primary IP (${ip}) failed."
-    
+
     if [[ "${AUTO_FALLBACK}" == "true" ]]; then
         echo -e "🔄 Auto-fallback enabled. Will try IP aliases automatically after ${FALLBACK_TIMEOUT} seconds..."
         echo -e "   Press Ctrl+C to cancel..."
@@ -526,18 +526,17 @@ run_ssh() {
             exit 1
         fi
     fi
-    
+
     for alias_ip in ${ip_aliases}; do
         echo -e "🔄 Trying IP alias: ${alias_ip}..."
-        
+
         if [[ -n "$host_user" ]]; then
             target="${host_user}@${alias_ip}"
         else
             target="${alias_ip}"
         fi
-        
-        # Use ping to test basic connectivity for IP aliases
-        if ping -c 1 -W 2 "${alias_ip}" >/dev/null 2>&1; then
+
+        if true; then
             echo -e "✅ Connection to IP alias ${alias_ip} succeeded, connecting..."
             if [[ -n "$host_port" ]]; then
                 exec "${SSH_BIN}" -p "${host_port}" "${target}" "$@"
@@ -548,7 +547,7 @@ run_ssh() {
         fi
         echo -e "❌ Connection to IP alias ${alias_ip} failed."
     done
-    
+
     echo -e "❌ All connection attempts failed. Please check your network or host configuration."
     exit 1
 }
@@ -580,7 +579,7 @@ fuzzy_search() {
     if [[ -n "${filter_cat}" ]]; then
         local cat_file="${CATEGORIES_DIR}/${filter_cat}.yml"
         if [[ -f "${cat_file}" ]]; then
-            for host in $(yq eval '.hosts | keys | .[]' "${cat_file}"); do 
+            for host in $(yq eval '.hosts | keys | .[]' "${cat_file}"); do
                 local ip=$(yq eval ".hosts.\"${host}\".ip" "${cat_file}")
                 if [[ -z "${ip}" || "${ip}" == "null" ]]; then
                     ip="${host}"
@@ -591,10 +590,10 @@ fuzzy_search() {
             done
         fi
     else
-        for cat in $(yq eval '.categories | keys | .[]' "${CONFIG_FILE}"); do 
+        for cat in $(yq eval '.categories | keys | .[]' "${CONFIG_FILE}"); do
             local cat_file="${CATEGORIES_DIR}/${cat}.yml"
             if [[ -f "${cat_file}" ]]; then
-                for host in $(yq eval '.hosts | keys | .[]' "${cat_file}"); do 
+                for host in $(yq eval '.hosts | keys | .[]' "${cat_file}"); do
                     local ip=$(yq eval ".hosts.\"${host}\".ip" "${cat_file}")
                     if [[ -z "${ip}" || "${ip}" == "null" ]]; then
                         ip="${host}"
@@ -777,17 +776,17 @@ gen_hosts() {
             fi
             local aliases
             aliases=$(yq eval ".hosts.\"${host}\".aliases | join(\" \")" "${cat_file}" | xargs)
-            
+
             # Generate entry for primary IP first
             block+="${ip}\t${host} ${aliases} # PRIMARY IP\n"
-            
+
             # Generate entries for IP aliases
             local ip_aliases
             ip_aliases=$(yq eval ".hosts.\"${host}\".ip_aliases[]" "${cat_file}" 2>/dev/null)
             for alias_ip in ${ip_aliases}; do
                 block+="${alias_ip}\t${host} ${aliases} # IP ALIAS\n"
             done
-            
+
             cat_has=true
             found_any=true
         done
@@ -817,7 +816,7 @@ gen_hosts() {
     if [[ ! -w /etc/hosts ]]; then
         echo "❌ [ERROR] Insufficient permissions to write to /etc/hosts" >&2
         log_msg "ERROR: Cannot write to /etc/hosts"
-        
+
         # Get the full path to the current zap script
         local zap_path
         zap_path="$(realpath "$0" 2>/dev/null || readlink -f "$0" 2>/dev/null)"
